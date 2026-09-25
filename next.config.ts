@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // the WebGL map is created imperatively; a dev-only double mount just spins up a second globe
+  reactStrictMode: false,
 };
 
 export default nextConfig;

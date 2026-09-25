@@ -167,8 +167,9 @@ export default function TerrainMap({
       canvasContextAttributes: { antialias: true, preserveDrawingBuffer: true },
     });
     mapRef.current = map;
+    (window as unknown as { __himalMap?: MLMap }).__himalMap = map;
 
-    map.on("load", () => {
+    map.once("style.load", () => {
       map.addSource("lakes", { type: "geojson", data: lakeFeatures(selectedId) });
       map.addSource("rivers", { type: "geojson", data: riverFeatures(selectedId) });
       map.addSource("flood", {
