@@ -50,7 +50,7 @@ export default function AlertPhone({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.35 }}
-              className="mt-4 rounded-2xl border border-red-alert/40 bg-[rgba(40,6,8,0.85)] p-3 backdrop-blur"
+              className="mt-4 rounded-2xl border border-red-alert/40 bg-[rgba(40,6,8,0.92)] p-3"
             >
               <div className="flex items-center gap-2 text-[10.5px] font-semibold tracking-wide text-[#ff8a7d] uppercase">
                 <Siren className="h-3.5 w-3.5 animate-siren" /> HIMAL · Extreme alert

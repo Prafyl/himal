@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Noto_Sans_Devanagari, Space_Grotesk } from "next/font/google";
-import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
@@ -30,7 +29,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${grotesk.variable} ${mono.variable} ${devanagari.variable} grain antialiased`}>
+      <body className={`${inter.variable} ${grotesk.variable} ${mono.variable} ${devanagari.variable} antialiased`}>
         {children}
       </body>
     </html>
