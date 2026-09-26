@@ -1,0 +1,15 @@
+{
+ "west": 80.0,
+ "south": 26.3,
+ "east": 88.3,
+ "north": 30.5,
+ "gw": 1000,
+ "gh": 575,
+ "tw": 4096,
+ "th": 2352,
+ "minEle": 0.0,
+ "maxEle": 8496.32798715077,
+ "widthKm": 812.7565767915472,
+ "heightKm": 467.54399999999987,
+ "imagery": "Sentinel-2 cloudless 2023 by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2023)"
+}
