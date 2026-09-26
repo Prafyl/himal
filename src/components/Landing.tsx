@@ -10,6 +10,7 @@ import {
   Route as RouteIcon,
   Smartphone,
   Thermometer,
+  Play,
   Users,
   Waves,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import { LAKES } from "@/data/lakes";
 import { fmtTemp } from "@/lib/format";
 import { useWeather } from "@/lib/useWeather";
 import { LEVEL_COLOR, riskIndex } from "@/lib/weather";
+import SiteFooter from "./SiteFooter";
 import ValleyScene from "./ValleyScene";
 import { CountUp, Eyebrow, GithubIcon, LiveDot, Logo, Reveal } from "./ui";
 
@@ -84,12 +86,15 @@ export default function Landing() {
                   Enter Mission Control
                   <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
                 </Link>
-                <a
-                  href="#threat"
-                  className="glass inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-[15px] font-medium text-white/90 transition hover:text-white"
+                <Link
+                  href="/story"
+                  className="glass group inline-flex items-center gap-2.5 rounded-full px-6 py-3.5 text-[15px] font-medium text-white/90 transition hover:text-white"
                 >
-                  Why it matters
-                </a>
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-white/15 transition group-hover:bg-white/25">
+                    <Play className="h-3 w-3 fill-current" />
+                  </span>
+                  Watch the 3-min story
+                </Link>
               </div>
             </motion.div>
           </div>
@@ -151,7 +156,7 @@ export default function Landing() {
       <How />
       <Sdgs />
       <FinalCta />
-      <Footer />
+      <SiteFooter />
     </main>
   );
 }
@@ -183,9 +188,9 @@ function Nav() {
       </Link>
       <div className="hidden items-center gap-8 text-[13.5px] text-slate-300 md:flex">
         <a href="#threat" className="transition hover:text-white">The threat</a>
-        <a href="#thame" className="transition hover:text-white">Thame 2024</a>
-        <a href="#people" className="transition hover:text-white">Who&apos;s at risk</a>
-        <a href="#how" className="transition hover:text-white">How it works</a>
+        <Link href="/story" className="transition hover:text-white">The Story</Link>
+        <Link href="/lakes" className="transition hover:text-white">Lake Registry</Link>
+        <Link href="/atlas" className="transition hover:text-white">GLOF Atlas</Link>
       </div>
       <div className="flex items-center gap-2">
         <a href={REPO_URL} target="_blank" rel="noreferrer" aria-label="Source code" className="glass hidden rounded-full p-2.5 text-slate-200 transition hover:text-white sm:inline-flex">
@@ -493,44 +498,5 @@ function FinalCta() {
         </Link>
       </Reveal>
     </section>
-  );
-}
-
-function Footer() {
-  const src = [
-    ["ICIMOD & UNDP glacial lake inventory (2020)", "https://www.icimod.org/new-glacial-lake-inventory-report-released-47-potentially-dangerous-glacial-lakes-ranked/"],
-    ["ICIMOD: Thame GLOF (Aug 2024)", "https://www.icimod.org/press-release/glof-from-thyanbo-glacial-lake-sweeps-away-thame-village/"],
-    ["Open-Meteo live weather API", "https://open-meteo.com/"],
-    ["OpenStreetMap rivers, villages and buildings", "https://www.openstreetmap.org/"],
-    ["AWS Terrain Tiles (elevation)", "https://registry.opendata.aws/terrain-tiles/"],
-    ["Sentinel-2 cloudless 2023 by EOX (CC BY-NC-SA 4.0)", "https://s2maps.eu"],
-  ];
-  return (
-    <footer className="border-t border-white/5 px-5 py-14 md:px-10">
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-10 md:flex-row md:justify-between">
-        <div className="max-w-sm">
-          <div className="flex items-center gap-2.5">
-            <Logo size={24} />
-            <span className="font-display font-semibold tracking-[0.2em] text-white">HIMAL</span>
-          </div>
-          <p className="mt-4 text-sm leading-relaxed text-slate-500">
-            Built in Nepal for the Acodemic × G.I.R.L.S. Global SDG Hackathon. Flood simulations are illustrative
-            and not an official warning service.
-          </p>
-        </div>
-        <div>
-          <div className="font-mono text-[11px] tracking-[0.2em] text-slate-500 uppercase">Data &amp; sources</div>
-          <ul className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-2 sm:gap-x-10">
-            {src.map(([t, u]) => (
-              <li key={u}>
-                <a href={u} target="_blank" rel="noreferrer" className="transition hover:text-ice-300">
-                  {t} ↗
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </footer>
   );
 }
