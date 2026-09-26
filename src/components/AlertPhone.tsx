@@ -11,7 +11,9 @@ export default function AlertPhone({
   lake,
   village,
   onClose,
+  hideClose = false,
 }: {
+  hideClose?: boolean;
   open: boolean;
   lake: Lake;
   village?: Village;
@@ -30,13 +32,13 @@ export default function AlertPhone({
           transition={{ type: "spring", stiffness: 120, damping: 16 }}
           className="pointer-events-auto relative w-[248px] rounded-[38px] border border-white/15 bg-[#05070c] p-2.5 shadow-[0_30px_80px_-10px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.04)]"
         >
-          <button
+          {!hideClose && <button
             onClick={onClose}
             aria-label="Close alert preview"
             className="absolute -top-2 -right-2 z-10 grid h-7 w-7 place-items-center rounded-full border border-white/15 bg-ink-800 text-slate-300 hover:text-white"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </button>}
           <div className="relative overflow-hidden rounded-[30px] bg-[linear-gradient(160deg,#1a2a44,#0b1322_45%,#2a0c10)] px-3 pt-2.5 pb-4">
             <div className="flex items-center justify-between px-2 font-mono text-[10px] text-white/80">
               <span>{hh}</span>
