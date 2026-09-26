@@ -615,7 +615,21 @@ function idleShot(frame: Frame, valley: Valley) {
   const pos = from.clone().add(side.multiplyScalar(3.4));
   pos.y = target.y + 5.6;
   target.y -= 0.5;
+  // some lakes sit behind a moraine or a bend in the valley: climb until the water is in plain view
+  const c = centroid(valley.ring);
+  const lake = frame.v(c[0], c[1], 30);
+  for (let i = 0; i < 30 && (blocked(frame, pos, lake) || blocked(frame, pos, target)); i++) pos.y += 0.5;
   return { pos, target };
+}
+
+/** does the terrain cut the straight line between two points? */
+function blocked(frame: Frame, a: THREE.Vector3, b: THREE.Vector3) {
+  const p = new THREE.Vector3();
+  for (let i = 1; i < 48; i++) {
+    p.lerpVectors(a, b, i / 48);
+    if (p.y < frame.groundY(p.x, p.z) + 0.05) return true;
+  }
+  return false;
 }
 
 function heroShot(frame: Frame, valley: Valley) {

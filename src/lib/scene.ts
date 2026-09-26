@@ -34,7 +34,7 @@ export type SceneData = {
 /* ---------------- loading ----------------
  * Each lake has a baked valley in /public/scene/<id>/ (height grid + Sentinel-2 texture).
  * Raw bytes are cached per lake (and prefetched in the background once the first scene is up);
- * decoded GPU textures are only kept for the two most recent lakes to keep memory flat.
+ * decoded GPU textures are only kept for the three most recent lakes to keep memory flat.
  */
 
 type Bytes = { meta: SceneMeta; heights: ArrayBuffer; image: ArrayBuffer };
@@ -115,8 +115,8 @@ export function loadScene(id: string, onProgress?: (p: number) => void): Promise
       return { id, meta: b.meta, heights: new Uint16Array(b.heights), texture };
     });
     decoded.set(id, d);
-    // keep the Nepal base plus at most two detailed valleys decoded
-    while ([...decoded.keys()].filter((k) => k !== BASE_ID).length > 2) {
+    // keep the Nepal base plus at most three detailed valleys decoded
+    while ([...decoded.keys()].filter((k) => k !== BASE_ID).length > 3) {
       const oldId = [...decoded.keys()].find((k) => k !== BASE_ID)!;
       const old = decoded.get(oldId)!;
       decoded.delete(oldId);
@@ -219,8 +219,36 @@ export class Frame {
   /** water level for a lake outline: a low percentile of the terrain along its shore */
   surface(ring: LngLat[]) {
     const s = ring.map(([lon, lat]) => this.elevation(lon, lat)).sort((a, b) => a - b);
-    return s[Math.floor(s.length * 0.2)] + 8;
+    const shore = s[Math.floor(s.length * 0.2)] + 8;
+    // the terrain inside the outline is the (flat) water in the DEM; sit just above most of it so the lake is never buried
+    let [w, so, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const [lon, lat] of ring) {
+      w = Math.min(w, lon);
+      e = Math.max(e, lon);
+      so = Math.min(so, lat);
+      n = Math.max(n, lat);
+    }
+    const inside: number[] = [];
+    for (let i = 0; i <= 24; i++)
+      for (let j = 0; j <= 24; j++) {
+        const lon = w + ((e - w) * i) / 24;
+        const lat = so + ((n - so) * j) / 24;
+        if (inRing(ring, lon, lat)) inside.push(this.elevation(lon, lat));
+      }
+    if (inside.length < 4) return shore;
+    inside.sort((a, b) => a - b);
+    return Math.max(shore, inside[Math.floor(inside.length * 0.85)] + 6);
   }
+}
+
+function inRing(ring: LngLat[], x: number, y: number) {
+  let c = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+  }
+  return c;
 }
 
 /* ---------------- per-lake valley data used by the scene + the simulation ---------------- */
