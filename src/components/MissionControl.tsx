@@ -20,30 +20,37 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LAKES, WAVE_SPEED_MS, etaMinutes, lakeById, type Lake, type Village } from "@/data/lakes";
 import { fmtEta, fmtTemp } from "@/lib/format";
 import { useWeather } from "@/lib/useWeather";
 import { LEVEL_COLOR, riskIndex, type LakeWeather } from "@/lib/weather";
 import AlertPhone from "./AlertPhone";
 import Gauge from "./Gauge";
-import TerrainMap from "./MapClient";
-import type { SimState } from "./TerrainMap";
+import type { SimState } from "./Valley3D";
+import ValleyScene from "./ValleyScene";
+import { valleyOf } from "@/lib/scene";
 import { LiveDot, Logo } from "./ui";
 import WeatherChart, { Sparkline } from "./WeatherChart";
 
+/** the outburst simulation is calibrated for this lake only */
+const SIM_LAKE = "tsho-rolpa";
 const SPEEDS = [2, 4, 8]; // simulated minutes of flood per real second
 const ease = [0.16, 1, 0.3, 1] as const;
 
 export default function MissionControl() {
   const { data } = useWeather();
   const [selectedId, setSelectedId] = useState(LAKES[0].id);
+  const [readyId, setReadyId] = useState<string | null>(null);
   const lake = lakeById(selectedId);
+  const valley = valleyOf(lake);
+  const { simKm: SIM_KM, villages: VILLAGES, structuresKm: STRUCTURES_KM } = valley;
   const w = data[lake.id];
   const risk = useMemo(() => riskIndex(lake, w), [lake, w]);
 
   // ---- simulation ----
   const simRef = useRef<SimState>({ active: false, km: 0, done: false });
+  useEffect(() => void ((window as unknown as { __sim?: unknown }).__sim = simRef), []);
   const [simActive, setSimActive] = useState(false);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -74,7 +81,7 @@ export default function MissionControl() {
     let raf = 0;
     let last = performance.now();
     let lastUi = 0;
-    const len = lake.geo.lengthKm;
+    const len = SIM_KM;
     const tick = (t: number) => {
       raf = requestAnimationFrame(tick);
       const dt = Math.min(0.05, (t - last) / 1000);
@@ -84,23 +91,28 @@ export default function MissionControl() {
       const simSeconds = dt * speedRef.current * 60;
       s.km = Math.min(len, s.km + (simSeconds * WAVE_SPEED_MS) / 1000);
       if (s.km >= len) s.done = true;
-      if (t - lastUi > 90 || s.done) {
+      if (t - lastUi > 140 || s.done) {
         lastUi = t;
         setSimKm(s.km);
       }
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [simActive, lake]);
+  }, [simActive, lake, SIM_KM]);
 
   // switching lakes cancels a running simulation
-  const selectLake = (id: string) => {
-    if (id === selectedId) return;
-    resetSim();
-    setVillage(null);
-    setYear(null);
-    setSelectedId(id);
-  };
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
+  const selectLake = useCallback(
+    (id: string) => {
+      if (id === selectedRef.current) return;
+      resetSim();
+      setVillage(null);
+      setYear(null);
+      setSelectedId(id);
+    },
+    [resetSim],
+  );
 
   // ---- retreat slider ----
   const [year, setYear] = useState<number | null>(null);
@@ -121,27 +133,31 @@ export default function MissionControl() {
   // ---- village drawer ----
   const [village, setVillage] = useState<Village | null>(null);
 
-  const alertVillage = useMemo(() => lake.geo.villages.find((v) => v.buildings >= 40) ?? lake.geo.villages[0], [lake]);
-  const bkm = lake.geo.bkm ?? [];
+  const alertVillage = useMemo(() => VILLAGES.find((v) => v.buildings >= 40) ?? VILLAGES[0], [VILLAGES]);
+  const bkm = STRUCTURES_KM;
   const structuresHit = bkm.filter((k) => k <= simKm).length;
-  const villagesHit = lake.geo.villages.filter((v) => v.km <= simKm).length;
+  const villagesHit = VILLAGES.filter((v) => v.km <= simKm).length;
   const simMinutes = etaMinutes(simKm);
-  const simDone = simActive && simKm >= lake.geo.lengthKm - 0.001;
+  const simDone = simActive && simKm >= SIM_KM - 0.001;
 
-  const padding = { left: 336, right: 412, top: 70, bottom: 150 };
+  const padding = useMemo(() => ({ left: 336, right: 412, top: 70, bottom: 150 }), []);
+  const onVillageClick = useCallback((name: string) => setVillage(VILLAGES.find((v) => v.name === name) ?? null), [VILLAGES]);
 
   return (
     <div className="relative min-h-[100svh] w-full overflow-hidden bg-ink-950 lg:h-[100svh]">
       {/* ===== map ===== */}
       <div className="relative h-[62svh] w-full lg:absolute lg:inset-0 lg:h-auto">
-        <TerrainMap
+        <ValleyScene
+          lake={lake}
           mode="control"
-          selectedId={selectedId}
           simRef={simRef}
           simActive={simActive}
+          simKm={simKm}
           lakeScale={lakeScale}
-          onVillageClick={setVillage}
-          padding={typeof window !== "undefined" && window.innerWidth >= 1024 ? padding : undefined}
+          onVillageClick={onVillageClick}
+          onLakeClick={selectLake}
+          onDetailReady={setReadyId}
+          insets={padding}
         />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-ink-950/90 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-ink-950/80 to-transparent" />
@@ -175,7 +191,7 @@ export default function MissionControl() {
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -20, opacity: 0 }}
-              className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2.5 rounded-full border border-red-alert/50 bg-[rgba(60,6,8,0.8)] px-5 py-2 font-mono text-[11px] tracking-[0.2em] text-[#ffb3a9] uppercase shadow-[0_0_40px_rgba(255,60,40,0.4)] backdrop-blur md:flex"
+              className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-2.5 rounded-full border border-red-alert/50 bg-[rgba(60,6,8,0.92)] px-5 py-2 font-mono text-[11px] tracking-[0.2em] text-[#ffb3a9] uppercase shadow-[0_0_40px_rgba(255,60,40,0.4)] md:flex"
             >
               <Siren className="h-4 w-4 animate-siren text-red-alert" /> GLOF simulation · {lake.name}
             </motion.div>
@@ -200,11 +216,11 @@ export default function MissionControl() {
           </div>
           <div className="scrollbar-thin flex-1 space-y-1.5 overflow-y-auto p-2">
             {LAKES.map((l, i) => (
-              <LakeRow key={l.id} lake={l} w={data[l.id]} active={l.id === selectedId} onClick={() => selectLake(l.id)} i={i} />
+              <LakeRow key={l.id} lake={l} w={data[l.id]} active={l.id === selectedId} onClick={selectLake} i={i} />
             ))}
           </div>
           <div className="border-t border-white/5 px-4 py-3 font-mono text-[10px] leading-relaxed text-slate-500">
-            Weather: Open-Meteo, refreshed every 10 min · Rivers, villages &amp; buildings: OpenStreetMap
+            Weather: Open-Meteo, refreshed every 10 min · Rivers, villages &amp; buildings © OpenStreetMap · Imagery: Sentinel-2 cloudless 2023 by EOX (modified Copernicus data) · Terrain: AWS Terrain Tiles
           </div>
         </motion.div>
       </aside>
@@ -227,7 +243,7 @@ export default function MissionControl() {
             >
               <LakeHeader lake={lake} />
               {simActive ? (
-                <EvacBoard lake={lake} km={simKm} />
+                <EvacBoard lake={lake} km={simKm} villages={VILLAGES} />
               ) : (
                 <>
                   <Section title="Hazard index" right={<span style={{ color: LEVEL_COLOR[risk.level] }}>{risk.level}</span>}>
@@ -311,7 +327,7 @@ export default function MissionControl() {
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", stiffness: 160, damping: 22 }}
-                className="sticky bottom-0 border-t border-ice-300/20 bg-ink-900/95 p-5 backdrop-blur-xl"
+                className="sticky bottom-0 border-t border-ice-300/20 bg-ink-900/95 p-5"
               >
                 <button onClick={() => setVillage(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white" aria-label="Close">
                   <X className="h-4 w-4" />
@@ -347,27 +363,47 @@ export default function MissionControl() {
             transition={{ duration: 0.9, ease, delay: 0.2 }}
             className="glass flex-1 rounded-2xl p-4"
           >
-            {!simActive ? (
+            {!simActive && lake.id !== SIM_LAKE ? (
+              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="font-display text-lg font-semibold text-white">Watching {lake.name}</div>
+                  <div className="mt-0.5 text-[12.5px] text-slate-400">
+                    Live conditions and flood path for {VILLAGES.length} downstream settlements. The full outburst simulation
+                    is modelled for Tsho Rolpa, Nepal&apos;s most closely studied dangerous lake.
+                  </div>
+                </div>
+                <button
+                  onClick={() => selectLake(SIM_LAKE)}
+                  className="inline-flex flex-none items-center gap-2.5 rounded-xl border border-red-alert/50 bg-red-alert/10 px-5 py-3.5 font-mono text-[12px] font-semibold tracking-[0.18em] text-[#ffb3a9] uppercase transition hover:bg-red-alert/20"
+                >
+                  <Siren className="h-4 w-4" />
+                  Fly to Tsho Rolpa
+                </button>
+              </div>
+            ) : !simActive ? (
               <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="font-display text-lg font-semibold text-white">What if {lake.name} bursts today?</div>
                   <div className="mt-0.5 text-[12.5px] text-slate-400">
-                    Flood front at ~{WAVE_SPEED_MS} m/s down {lake.geo.lengthKm} km of real river channel ·{" "}
-                    {lake.geo.villages.length} settlements · {lake.geo.corridorBuildings.toLocaleString()} structures in the corridor
+                    Flood front at ~{WAVE_SPEED_MS} m/s down {SIM_KM} km of the real {lake.rivers.replace(" → ", "–")} channel ·{" "}
+                    {VILLAGES.length} settlements · {STRUCTURES_KM.length.toLocaleString()} structures in the flood corridor
                   </div>
                 </div>
                 <button
                   onClick={startSim}
-                  className="group relative inline-flex flex-none items-center gap-2.5 overflow-hidden rounded-xl bg-red-alert px-5 py-3.5 font-mono text-[12px] font-semibold tracking-[0.18em] text-white uppercase shadow-[0_0_40px_rgba(255,77,61,0.55)] transition hover:shadow-[0_0_60px_rgba(255,77,61,0.8)]"
+                  disabled={readyId !== lake.id}
+                  className="group relative inline-flex flex-none items-center gap-2.5 overflow-hidden rounded-xl bg-red-alert px-5 py-3.5 font-mono text-[12px] font-semibold tracking-[0.18em] text-white uppercase shadow-[0_0_40px_rgba(255,77,61,0.55)] transition hover:shadow-[0_0_60px_rgba(255,77,61,0.8)] disabled:cursor-wait disabled:opacity-50 disabled:shadow-none"
                 >
-                  <span className="absolute inset-0 animate-siren bg-white/10" />
+                  {readyId === lake.id && <span className="absolute inset-0 animate-siren bg-white/10" />}
                   <Siren className="relative h-4 w-4" />
-                  <span className="relative">Simulate outburst</span>
+                  <span className="relative">{readyId === lake.id ? "Simulate outburst" : "Loading valley…"}</span>
                 </button>
               </div>
             ) : (
               <SimConsole
                 lake={lake}
+                len={SIM_KM}
+                marks={VILLAGES}
                 km={simKm}
                 minutes={simMinutes}
                 structures={structuresHit}
@@ -419,7 +455,19 @@ function Clock() {
   );
 }
 
-function LakeRow({ lake, w, active, onClick, i }: { lake: Lake; w?: LakeWeather; active: boolean; onClick: () => void; i: number }) {
+const LakeRow = memo(function LakeRow({
+  lake,
+  w,
+  active,
+  onClick,
+  i,
+}: {
+  lake: Lake;
+  w?: LakeWeather;
+  active: boolean;
+  onClick: (id: string) => void;
+  i: number;
+}) {
   const r = riskIndex(lake, w);
   const temps = w ? w.hourly.temperature.slice(Math.max(0, w.hourly.time.findIndex((t) => t >= w.current.time) - 72), w.hourly.time.findIndex((t) => t >= w.current.time) + 1) : [];
   return (
@@ -427,7 +475,7 @@ function LakeRow({ lake, w, active, onClick, i }: { lake: Lake; w?: LakeWeather;
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.2 + i * 0.06 }}
-      onClick={onClick}
+      onClick={() => onClick(lake.id)}
       className={`group relative w-full rounded-xl border px-3.5 py-3 text-left transition ${
         active ? "border-ice-300/40 bg-ice-300/[0.08] shadow-[0_0_30px_-8px_rgba(111,220,255,0.5)]" : "border-transparent hover:bg-white/[0.04]"
       }`}
@@ -456,7 +504,7 @@ function LakeRow({ lake, w, active, onClick, i }: { lake: Lake; w?: LakeWeather;
       </div>
     </motion.button>
   );
-}
+});
 
 function LakeHeader({ lake }: { lake: Lake }) {
   const stats = [
@@ -532,17 +580,17 @@ function LiveSection({ w }: { w?: LakeWeather }) {
   );
 }
 
-function EvacBoard({ lake, km }: { lake: Lake; km: number }) {
+function EvacBoard({ km, villages: VILLAGES }: { lake: Lake; km: number; villages: Village[] }) {
   const listRef = useRef<HTMLDivElement>(null);
   const t = etaMinutes(km);
   return (
     <div className="p-5">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[10.5px] tracking-[0.22em] text-[#ff8a7d] uppercase">Evacuation board</div>
-        <div className="font-mono text-[10.5px] text-slate-500">{lake.geo.villages.length} settlements</div>
+        <div className="font-mono text-[10.5px] text-slate-500">{VILLAGES.length} settlements</div>
       </div>
       <div ref={listRef} className="mt-3 space-y-1.5">
-        {lake.geo.villages.map((v) => {
+        {VILLAGES.map((v) => {
           const left = etaMinutes(v.km) - t;
           const hit = left <= 0;
           const warned = !hit && left < 45;
@@ -577,6 +625,8 @@ function EvacBoard({ lake, km }: { lake: Lake; km: number }) {
 
 function SimConsole(p: {
   lake: Lake;
+  len: number;
+  marks: Village[];
   km: number;
   minutes: number;
   structures: number;
@@ -589,7 +639,7 @@ function SimConsole(p: {
   onReset: () => void;
   onReplay: () => void;
 }) {
-  const len = p.lake.geo.lengthKm;
+  const len = p.len;
   const hh = Math.floor(p.minutes / 60);
   const mm = Math.floor(p.minutes % 60);
   const ss = Math.floor((p.minutes * 60) % 60);
@@ -638,7 +688,7 @@ function SimConsole(p: {
           className="absolute top-4 left-0 h-1 rounded-full bg-gradient-to-r from-[#78141e] via-red-alert to-[#ffd9a8] shadow-[0_0_14px_rgba(255,77,61,0.9)]"
           style={{ width: `${(p.km / len) * 100}%` }}
         />
-        {p.lake.geo.villages
+        {p.marks
           .filter((v) => v.buildings >= 40)
           .map((v) => {
             const hit = v.km <= p.km;

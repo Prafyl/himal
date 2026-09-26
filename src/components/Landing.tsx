@@ -18,7 +18,7 @@ import { LAKES } from "@/data/lakes";
 import { fmtTemp } from "@/lib/format";
 import { useWeather } from "@/lib/useWeather";
 import { LEVEL_COLOR, riskIndex } from "@/lib/weather";
-import TerrainMap from "./MapClient";
+import ValleyScene from "./ValleyScene";
 import { CountUp, Eyebrow, GithubIcon, LiveDot, Logo, Reveal } from "./ui";
 
 export const REPO_URL = "https://github.com/Prafyl/himal";
@@ -35,7 +35,7 @@ export default function Landing() {
     <main className="relative">
       {/* ================= HERO ================= */}
       <section className="relative h-[100svh] min-h-[640px] w-full overflow-hidden">
-        <TerrainMap mode="hero" selectedId={hero.id} />
+        <ValleyScene mode="hero" lake={hero} />
         {/* cinematic grading */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_40%,transparent_0%,rgba(3,6,12,0.25)_55%,rgba(3,6,12,0.85)_100%)]" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-ink-950/90 to-transparent" />
@@ -215,7 +215,7 @@ function Ticker({ data }: { data: ReturnType<typeof useWeather>["data"] }) {
     );
   });
   return (
-    <div className="absolute inset-x-0 bottom-0 z-10 overflow-hidden border-t border-white/5 bg-ink-950/60 py-3 backdrop-blur-md">
+    <div className="absolute inset-x-0 bottom-0 z-10 overflow-hidden border-t border-white/5 bg-ink-950/85 py-3">
       <div className="flex w-max animate-marquee font-mono text-[11px] tracking-[0.14em] text-slate-400">
         <span className="flex items-center gap-2 pl-6 pr-4 text-safe">
           <LiveDot /> LIVE FEED · OPEN-METEO
@@ -503,7 +503,7 @@ function Footer() {
     ["Open-Meteo live weather API", "https://open-meteo.com/"],
     ["OpenStreetMap rivers, villages and buildings", "https://www.openstreetmap.org/"],
     ["AWS Terrain Tiles (elevation)", "https://registry.opendata.aws/terrain-tiles/"],
-    ["Esri World Imagery", "https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9"],
+    ["Sentinel-2 cloudless 2023 by EOX (CC BY-NC-SA 4.0)", "https://s2maps.eu"],
   ];
   return (
     <footer className="border-t border-white/5 px-5 py-14 md:px-10">
