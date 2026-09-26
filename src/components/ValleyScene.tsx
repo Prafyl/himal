@@ -5,13 +5,14 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { LAKES, type Lake } from "@/data/lakes";
 import { BASE_ID, loadScene, offProgress, prefetchScenes, type SceneData } from "@/lib/scene";
-import type { SimState } from "./Valley3D";
+import type { Shot, SimState } from "./Valley3D";
 
 const Valley3D = dynamic(() => import("./Valley3D"), { ssr: false });
 
 type Props = {
   lake: Lake;
-  mode: "hero" | "control";
+  mode: "hero" | "control" | "story";
+  shot?: Shot;
   simRef?: React.RefObject<SimState>;
   simActive?: boolean;
   simKm?: number;
@@ -109,7 +110,7 @@ export default function ValleyScene({ lake, onDetailReady, ...props }: Props) {
       )}
 
       {/* switching lakes: small progress chip while the detailed valley streams in */}
-      {loaderGone && !detailReady && (
+      {loaderGone && !detailReady && props.mode !== "story" && (
         <div className="pointer-events-none absolute top-20 left-1/2 z-10 -translate-x-1/2 rounded-full border border-ice-300/20 bg-ink-900/90 px-4 py-2 font-mono text-[10.5px] tracking-[0.2em] text-ice-200 uppercase">
           {failed ? "Could not load terrain" : `Loading ${lake.name} valley · ${Math.round(Math.max(0, progress - 0.5) * 200)}%`}
         </div>

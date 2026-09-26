@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { LAKES, etaMinutes, type Lake as LakeInfo } from "@/data/lakes";
 import { fmtEta } from "@/lib/format";
 import { centroid } from "@/lib/geo";
-import { EXAG, Frame, valleyOf, type SceneData, type Valley } from "@/lib/scene";
+import { EXAG, Frame, gxz, valleyOf, type SceneData, type Valley } from "@/lib/scene";
 
 const { ACTION } = CameraControlsImpl;
 
@@ -19,7 +19,9 @@ type Props = {
   /** high-detail valley of the selected lake, once loaded */
   detail: SceneData | null;
   lake: LakeInfo;
-  mode: "hero" | "control";
+  mode: "hero" | "control" | "story";
+  /** story mode: which camera shot to hold ("hero" orbits the lake, "idle" looks up the valley, "overview" frames Nepal) */
+  shot?: Shot;
   simRef?: React.RefObject<SimState>;
   simActive?: boolean;
   /** km of the flood front, updated a few times per second (for labels) */
@@ -32,6 +34,7 @@ type Props = {
 };
 
 type VP = { frame: Frame; valley: Valley; surfaceM: number };
+export type Shot = "hero" | "idle" | "overview";
 
 const FOG = new THREE.Color("#0a1628");
 
@@ -69,7 +72,7 @@ export default function Valley3D(props: Props) {
         <directionalLight position={[18, 22, 14]} intensity={2.4} color="#fff3e2" />
         <Terrain frame={baseFrame} base hole={detailFrame?.rect ?? null} />
         {detailFrame && <DetailValley key={detailFrame.d.id} frame={detailFrame} {...props} />}
-        <Markers base={baseFrame} lake={props.lake} mode={props.mode} onClick={props.onLakeClick} />
+        <Markers base={baseFrame} lake={props.lake} mode={props.mode} shot={props.shot} onClick={props.onLakeClick} />
         <Rig {...props} baseF={baseFrame} detailF={detailFrame} />
       </Canvas>
     </div>
@@ -505,6 +508,8 @@ function Labels({
 }: VP & { lake: LakeInfo; mode: Props["mode"]; simKm: number; onClick?: (n: string) => void }) {
   const clickRef = useRef(onClick);
   clickRef.current = onClick;
+  const simKmRef = useRef(simKm);
+  simKmRef.current = simKm;
 
   const items = useMemo(() => {
     const items: LabelItem[] = [];
@@ -525,7 +530,7 @@ function Labels({
     lake.style.cssText = "position:absolute;left:0;top:0;will-change:transform";
     items.push({ el: lake, pos: lp, kind: "lake" });
 
-    if (mode === "control") {
+    if (mode !== "hero") {
       valley.villages.forEach((v, i) => {
         const el = document.createElement("div");
         el.className = "vmark" + (v.buildings >= 40 || i < 2 ? "" : " minor");
@@ -569,16 +574,22 @@ function Labels({
   // hide village labels when zoomed far out (they'd pile up on top of each other)
   useFrame(({ controls }) => {
     const d = (controls as unknown as CameraControlsImpl | null)?.distance ?? 0;
-    const hide = d > 40 ? "1" : "0";
-    for (const it of items) if (it.kind === "village" && it.el.dataset.hide !== hide) it.el.dataset.hide = hide;
+    const hide = d > 40 || (mode === "story" && simKmRef.current < 0) ? "1" : "0";
+    const hideLake = d > 90 ? "1" : "0";
+    for (const it of items) {
+      const h = it.kind === "village" ? hide : hideLake;
+      if (it.el.dataset.hide !== h) it.el.dataset.hide = h;
+    }
   });
   return null;
 }
 
 /** clickable pins for every monitored lake, so you can roam Nepal and jump between them */
-function Markers({ base, lake, mode, onClick }: { base: Frame; lake: LakeInfo; mode: Props["mode"]; onClick?: (id: string) => void }) {
+function Markers({ base, lake, mode, shot, onClick }: { base: Frame; lake: LakeInfo; mode: Props["mode"]; shot?: Shot; onClick?: (id: string) => void }) {
   const clickRef = useRef(onClick);
   clickRef.current = onClick;
+  // in the story the pins only appear on the whole-country shot
+  const hideAll = mode === "story" && shot !== "overview";
   const items = useMemo(() => {
     if (mode === "hero") return [];
     return LAKES.map((l) => {
@@ -595,7 +606,7 @@ function Markers({ base, lake, mode, onClick }: { base: Frame; lake: LakeInfo; m
   useFrame(({ controls }) => {
     const d = (controls as unknown as CameraControlsImpl | null)?.distance ?? 0;
     for (const it of items) {
-      const hide = it.id === lake.id && d < 40 ? "1" : "0";
+      const hide = hideAll || (it.id === lake.id && d < 40) ? "1" : "0";
       if (it.el.dataset.hide !== hide) it.el.dataset.hide = hide;
       it.el.classList.toggle("active", it.id === lake.id);
     }
@@ -641,24 +652,38 @@ function heroShot(frame: Frame, valley: Valley) {
   return { pos, target: lakeC.clone().add(new THREE.Vector3(0, 0.3, 0)) };
 }
 
+/** the whole monitored arc of the Himalaya, from Thulagi in the west to Lower Barun in the east */
+function overviewShot() {
+  const [x, z] = gxz(85.6, 28.05);
+  return { pos: new THREE.Vector3(x, 225, z + 115), target: new THREE.Vector3(x, 2, z) };
+}
+
 function Rig({
   baseF: base,
   detailF: detail,
   lake,
   mode,
+  shot: shotProp,
   simRef,
   simActive = false,
   insets,
 }: Props & { baseF: Frame; detailF: Frame | null }) {
   const ctl = useRef<CameraControls>(null);
   const { camera, size } = useThree();
-  const phase = useRef<"intro" | "orbit" | "idle" | "follow" | "overview">("intro");
+  const phase = useRef<"intro" | "orbit" | "idle" | "follow" | "overview" | "drift" | "push">("intro");
+  const shot: Shot = shotProp ?? (mode === "hero" ? "hero" : "idle");
+  const story = mode === "story";
+  const prevShot = useRef<Shot>(shot);
   const valley = valleyOf(lake);
   // camera maths uses the detailed valley when it's loaded, otherwise the country tile
   const ground = detail ?? base;
   const groundRef = useRef(ground);
   groundRef.current = ground;
   const first = useRef(true);
+  const moved = useRef(false);
+  const opening = useRef(true);
+  const shotFor = () => (shot === "overview" ? overviewShot() : shot === "hero" ? heroShot(groundRef.current, valley) : idleShot(groundRef.current, valley));
+  const restPhase = () => (shot === "hero" ? (story ? "push" : "orbit") : shot === "overview" && story ? "drift" : "idle");
 
   // keep the scene centred in the part of the screen not covered by panels
   useEffect(() => {
@@ -681,7 +706,11 @@ function Rig({
     c.boundaryFriction = 0.15;
     c.dollyToCursor = true;
     c.verticalDragToForward = true;
-    if (mode === "hero") {
+    if (story) {
+      // the story drives the camera by itself
+      for (const k of ["left", "middle", "right", "wheel"] as const) c.mouseButtons[k] = ACTION.NONE;
+      for (const k of ["one", "two", "three"] as const) c.touches[k] = ACTION.NONE;
+    } else if (mode === "hero") {
       c.mouseButtons.left = ACTION.ROTATE;
       c.mouseButtons.wheel = ACTION.NONE;
       c.mouseButtons.middle = ACTION.NONE;
@@ -698,43 +727,68 @@ function Rig({
       c.touches.two = ACTION.TOUCH_DOLLY_ROTATE;
       c.touches.three = ACTION.TOUCH_TRUCK;
     }
-  }, [base, mode]);
+  }, [base, mode, story]);
 
-  // fly to the selected lake: on first load from high above the Himalaya; when switching, up and over, then down
+  // fly to the selected lake: on first load from high above the Himalaya; when switching, a quick hop up and over.
+  // Timed with setTimeout rather than waiting for the camera to come fully to rest, so a switch never stalls.
   useEffect(() => {
     const c = ctl.current;
     if (!c) return;
     let cancelled = false;
-    const g = groundRef.current;
-    const shot = mode === "hero" ? heroShot(g, valley) : idleShot(g, valley);
-    const land = () => {
-      if (cancelled) return;
-      c.smoothTime = mode === "hero" ? 2.2 : 1.5;
-      c.setLookAt(shot.pos.x, shot.pos.y, shot.pos.z, shot.target.x, shot.target.y, shot.target.z, true).then(() => {
-        if (!cancelled && phase.current === "intro") phase.current = mode === "hero" ? "orbit" : "idle";
-      });
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const later = (fn: () => void, ms: number) => timers.push(setTimeout(() => !cancelled && fn(), ms));
+    moved.current = false;
+    const target0 = shotFor();
+    const land = (smooth: number, settleMs: number) => {
+      // re-aim at landing time: the detailed valley may have streamed in during the hop
+      const aim = shotFor();
+      c.smoothTime = smooth;
+      c.setLookAt(aim.pos.x, aim.pos.y, aim.pos.z, aim.target.x, aim.target.y, aim.target.z, true);
+      later(() => {
+        if (phase.current === "intro") phase.current = restPhase();
+      }, settleMs);
     };
     phase.current = "intro";
+    const cleanup = () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
+    opening.current = first.current;
+    const fromShot = prevShot.current;
+    prevShot.current = shot;
     if (first.current) {
       first.current = false;
-      c.setLookAt(shot.target.x - 30, 140, shot.target.z + 210, shot.target.x, 3, shot.target.z - 20, false);
-      const t = setTimeout(land, 300);
-      return () => {
-        cancelled = true;
-        clearTimeout(t);
-      };
+      const cine = mode === "hero" || story;
+      if (shot === "overview") c.setLookAt(target0.pos.x, target0.pos.y + 120, target0.pos.z + 160, target0.target.x, target0.target.y, target0.target.z, false);
+      else c.setLookAt(target0.target.x - 30, 140, target0.target.z + 210, target0.target.x, 3, target0.target.z - 20, false);
+      later(() => land(cine ? 2.2 : 1.5, cine ? 5000 : 3500), 300);
+      return cleanup;
     }
-    // up and over: climb high above the midpoint, then descend onto the new valley
     const from = c.getTarget(new THREE.Vector3());
-    const mid = from.clone().lerp(shot.target, 0.5);
-    const span = from.distanceTo(shot.target);
-    c.smoothTime = 1.1;
-    c.setLookAt(mid.x, Math.max(40, span * 0.55), mid.z + span * 0.45, mid.x, 3, mid.z, true).then(land);
-    return () => {
-      cancelled = true;
-    };
+    const span = from.distanceTo(target0.target);
+    // pulling out to the whole country, swooping down from it, or re-framing the same valley: one smooth move
+    if (shot === "overview" || fromShot === "overview" || span < 25) {
+      land(story ? 1.7 : 0.9, story ? 3200 : 1800);
+      return cleanup;
+    }
+    // hop: rise over the midpoint just long enough to clear the peaks in between, then drop onto the new valley
+    const mid = from.clone().lerp(target0.target, 0.5);
+    c.smoothTime = story ? 0.7 : 0.35;
+    c.setLookAt(mid.x, Math.max(30, span * 0.4), mid.z + span * 0.3, mid.x, 3, mid.z, true);
+    later(() => land(story ? 1.3 : 0.6, story ? 2600 : 1600), story ? 1300 : Math.min(750, 300 + span * 2));
+    return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lake.id, mode]);
+  }, [lake.id, mode, shot]);
+
+  // the detailed valley arrived after we aimed at the coarse tile: settle into the proper shot (unless the visitor took over)
+  useEffect(() => {
+    const c = ctl.current;
+    if (!c || !detail || mode === "hero" || shot === "overview" || moved.current || (opening.current && phase.current === "intro") || (phase.current !== "idle" && phase.current !== "intro")) return;
+    const { pos, target } = shotFor();
+    c.smoothTime = 0.6;
+    c.setLookAt(pos.x, pos.y, pos.z, target.x, target.y, target.z, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail]);
 
   // simulation camera
   useEffect(() => {
@@ -744,11 +798,13 @@ function Rig({
       phase.current = "follow";
       c.smoothTime = 0.9;
     } else if (phase.current === "follow" || phase.current === "overview") {
-      phase.current = "idle";
+      // back from a flood run (a lake switch sets phase to "intro" first, so it wins)
+      phase.current = restPhase();
       c.smoothTime = 1.4;
-      const { pos, target } = idleShot(groundRef.current, valley);
+      const { pos, target } = shotFor();
       c.setLookAt(pos.x, pos.y, pos.z, target.x, target.y, target.z, true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simActive, valley]);
 
   const tmpA = useMemo(() => new THREE.Vector3(), []);
@@ -758,7 +814,12 @@ function Rig({
     const g = groundRef.current;
     const route = valley.river;
     if (phase.current === "orbit") {
-      c.rotate(dt * 0.045, 0, false);
+      c.rotate(dt * (story ? 0.06 : 0.045), 0, false);
+    } else if (phase.current === "push") {
+      if (c.distance > 4.5) c.dolly(dt * 0.22, false);
+      c.rotate(dt * 0.012, 0, false);
+    } else if (phase.current === "drift") {
+      if (c.distance > 190) c.dolly(dt * 5, false);
     } else if (phase.current === "follow" && simRef?.current) {
       const s = simRef.current;
       if (s.done) {
@@ -791,13 +852,14 @@ function Rig({
     <CameraControls
       ref={ctl}
       makeDefault
-      enabled={!simActive}
+      enabled={!simActive && !story}
       minDistance={1.5}
       maxDistance={700}
       maxPolarAngle={Math.PI * 0.47}
       dollySpeed={0.7}
       truckSpeed={1.6}
       onStart={() => {
+        moved.current = true;
         if (phase.current === "intro" || phase.current === "orbit") phase.current = "idle";
       }}
       onEnd={() => {
