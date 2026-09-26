@@ -45,6 +45,8 @@ export type Lake = {
   mitigation?: string;
   peopleNote?: string;
   history?: { year: number; area: number; approx?: boolean }[];
+  /** how far down the valley the baked 3D scene and the outburst simulation reach */
+  simKm: number;
   /** initial camera for the flyover */
   camera: { bearing: number; zoom: number; pitch: number };
   geo: Geo;
@@ -53,6 +55,7 @@ export type Lake = {
 export const LAKES: Lake[] = [
   {
     id: "tsho-rolpa",
+    simKm: 36.5,
     name: "Tsho Rolpa",
     ne: "छो रोल्पा",
     district: "Dolakha",
@@ -78,6 +81,7 @@ export const LAKES: Lake[] = [
   },
   {
     id: "imja-tsho",
+    simKm: 35.5,
     name: "Imja Tsho",
     ne: "इम्जा ताल",
     district: "Solukhumbu",
@@ -103,6 +107,7 @@ export const LAKES: Lake[] = [
   },
   {
     id: "lower-barun",
+    simKm: 38.5,
     name: "Lower Barun",
     ne: "तल्लो बरुण",
     district: "Sankhuwasabha",
@@ -119,6 +124,7 @@ export const LAKES: Lake[] = [
   },
   {
     id: "thulagi",
+    simKm: 33,
     name: "Thulagi (Dona)",
     ne: "थुलागी ताल",
     district: "Manang",
@@ -136,6 +142,7 @@ export const LAKES: Lake[] = [
   },
   {
     id: "thyanbo",
+    simKm: 25,
     name: "Thyanbo · Thame",
     ne: "थ्यान्बो · थामे",
     district: "Solukhumbu",
