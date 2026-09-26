@@ -47,7 +47,7 @@ const CHAPTERS: Chapter[] = [
     lake: "thyanbo",
     shot: "hero",
     lines: [
-      { at: 0.4, text: "High above the village of Thame sat Thyanbo, a glacial lake of just 0.05 km²." },
+      { at: 0.4, text: "High above the village of Thame sat Thyanbo, a glacial lake of just 0.05 km²." },
       { at: 7.5, text: "At around 13:25, the loose moraine holding it back gave way." },
       { at: 14.5, text: "Within minutes, 25 homes, the school, the health post and a hydropower plant were gone." },
     ],
@@ -407,7 +407,7 @@ export default function Story() {
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
               transition={{ duration: 0.9, ease }}
-              className="font-display max-w-[1100px] text-center text-[clamp(18px,2.1vw,34px)] leading-snug font-medium text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.95),0_0_2px_rgba(0,0,0,0.9)]"
+              className="font-display max-w-[1100px] text-center text-balance text-[clamp(18px,2.1vw,34px)] leading-snug font-medium text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.95),0_0_2px_rgba(0,0,0,0.9)]"
             >
               {lineText}
             </motion.p>
