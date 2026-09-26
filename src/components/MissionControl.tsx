@@ -38,9 +38,9 @@ const SIM_LAKE = "tsho-rolpa";
 const SPEEDS = [2, 4, 8]; // simulated minutes of flood per real second
 const ease = [0.16, 1, 0.3, 1] as const;
 
-export default function MissionControl() {
+export default function MissionControl({ initialLake }: { initialLake?: string }) {
   const { data } = useWeather();
-  const [selectedId, setSelectedId] = useState(LAKES[0].id);
+  const [selectedId, setSelectedId] = useState(initialLake ?? LAKES[0].id);
   const [readyId, setReadyId] = useState<string | null>(null);
   const lake = lakeById(selectedId);
   const valley = valleyOf(lake);
@@ -184,6 +184,12 @@ export default function MissionControl() {
           <div className="glass hidden items-center gap-2 rounded-full px-3.5 py-1.5 font-mono text-[10.5px] tracking-[0.2em] text-ice-100 uppercase sm:flex">
             <GaugeIcon className="h-3.5 w-3.5 text-ice-300" /> Mission Control
           </div>
+          <Link href="/lakes" className="glass hidden rounded-full px-3.5 py-1.5 font-mono text-[10.5px] tracking-[0.2em] text-slate-400 uppercase transition hover:text-white xl:block">
+            Registry
+          </Link>
+          <Link href="/atlas" className="glass hidden rounded-full px-3.5 py-1.5 font-mono text-[10.5px] tracking-[0.2em] text-slate-400 uppercase transition hover:text-white xl:block">
+            Atlas
+          </Link>
         </div>
         <AnimatePresence>
           {simActive && (
